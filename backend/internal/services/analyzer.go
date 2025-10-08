@@ -22,18 +22,18 @@ var RegionMap = map[string]string{
 	"dl": "大连", "sy": "沈阳", "cs": "长沙", "zz": "郑州",
 }
 
+// serverPattern matches region-prefixed domains with optional numeric suffixes
+// Examples: hk.example, hk-1.example, hk1.example
+var serverPattern = regexp.MustCompile(`^([a-z]{2,3})(?:-?(\d+))?\.`)
+
 // AnalyzeDNSRecords analyzes DNS records and suggests servers
 func AnalyzeDNSRecords(records []DNSRecordSync) AnalysisResult {
 	var suggestions []ServerSuggestion
 
-	// Server pattern: region-number or regionnumber format, number is optional
-	// Supports: hk.x.com, hk-1.x.com, hk1.x.com, *.hk-1.x.com, app.hk-1.x.com
-	serverPattern := regexp.MustCompile(`^([a-z]{2,3})(?:-(\d+))?\.`)
-
 	// Build maps for analysis
-	cnameTargetMap := make(map[string][]string)      // target -> []sources
-	ipMap := make(map[string][]string)                // ip -> []domains
-	domainMap := make(map[string]DNSRecordSync)       // domain -> record
+	cnameTargetMap := make(map[string][]string) // target -> []sources
+	ipMap := make(map[string][]string)          // ip -> []domains
+	domainMap := make(map[string]DNSRecordSync) // domain -> record
 
 	// First pass: build maps
 	for _, record := range records {
@@ -86,16 +86,16 @@ func AnalyzeDNSRecords(records []DNSRecordSync) AnalysisResult {
 			serverNum := matches[2]
 
 			suggestion := ServerSuggestion{
-				Domain:          record.FullDomain,
-				IP:              record.TargetValue,
-				MatchReason:     "域名格式匹配（地域-数字）",
-				Confidence:      "high",
-				SuggestedName:   func() string {
-				if serverNum != "" {
-					return regionCode + "-" + serverNum
-				}
-				return regionCode
-			}(),
+				Domain:      record.FullDomain,
+				IP:          record.TargetValue,
+				MatchReason: "域名格式匹配（地域-数字）",
+				Confidence:  "high",
+				SuggestedName: func() string {
+					if serverNum != "" {
+						return regionCode + "-" + serverNum
+					}
+					return regionCode
+				}(),
 				SuggestedRegion: RegionMap[regionCode],
 				ReferencedBy:    cnameTargetMap[record.FullDomain],
 			}
@@ -234,9 +234,6 @@ func GroupRecords(records []models.DNSRecord, providers []models.Provider) Group
 		var primaryServer models.DNSRecord
 		var otherServers []models.DNSRecord
 
-		// Server pattern for region-number format detection
-		serverPattern := regexp.MustCompile(`^([a-z]{2,3})(?:-?(\d+))?\.`)
-
 		// Sort to find best primary: prefer region-formatted domains
 		bestScore := -1
 		for _, server := range serversWithSameIP {
@@ -274,7 +271,6 @@ func GroupRecords(records []models.DNSRecord, providers []models.Provider) Group
 		serverGroup := ServerGroup{
 			Server: primaryServer,
 		}
-
 
 		// Add other same-IP servers as related A records
 		for _, otherServer := range otherServers {
