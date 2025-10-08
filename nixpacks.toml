@@ -1,0 +1,18 @@
+[phases.install]
+commands = [
+  "npm ci --prefix frontend",
+  "cd backend && go mod download"
+]
+
+[phases.build]
+commands = [
+  "npm run build --prefix frontend -- --outDir ../backend/public",
+  "mkdir -p bin",
+  "cd backend && go build -o ../bin/server ./cmd"
+]
+
+[start]
+command = "cd backend && ../bin/server"
+
+[start.environment]
+GIN_MODE = "release"
