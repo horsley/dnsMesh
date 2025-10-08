@@ -10,6 +10,7 @@ const Dashboard = {
   servers: [],
   unassignedRecords: [],
   loading: true,
+  providerCapabilities: {},
   showProviderWizard: false,
   showSettings: false,
   showRecordForm: false,
@@ -36,6 +37,7 @@ const Dashboard = {
       const response = await records.list()
       this.servers = response.servers || []
       this.unassignedRecords = response.unassigned_records || []
+      this.providerCapabilities = response.provider_capabilities || {}
     } catch (error) {
       console.error('Failed to load data:', error)
       if (error.code === 401) {
@@ -66,6 +68,31 @@ const Dashboard = {
       await this.loadData()
     } catch (error) {
       alert('删除失败: ' + (error.response?.error || error.message))
+    }
+  },
+
+  supportsRecordStatusToggle(providerId) {
+    if (!providerId) return false
+    const capability = this.providerCapabilities?.[providerId]
+    return Boolean(capability && capability.supports_record_status_toggle)
+  },
+
+  async changeRecordStatus(record, enable) {
+    const actionText = enable ? '恢复' : '暂停'
+    const confirmMessage = enable
+      ? '确定要恢复此解析记录吗？'
+      : '确定要暂停此解析记录吗？暂停后可稍后恢复。'
+    if (!confirm(confirmMessage)) return
+
+    try {
+      if (enable) {
+        await records.enable(record.id)
+      } else {
+        await records.disable(record.id)
+      }
+      await this.loadData()
+    } catch (error) {
+      alert(actionText + '失败: ' + (error.response?.error || error.message))
     }
   },
 
@@ -123,6 +150,12 @@ const Dashboard = {
       return trimmed
     }
     return `https://${trimmed}`
+  },
+
+  renderStatusBadge(label, variant = 'default') {
+    return m('span.status-badge', {
+      class: variant ? `status-badge--${variant}` : null
+    }, label)
   },
 
   handleUserUpdate(updatedUser) {
@@ -251,12 +284,15 @@ const Dashboard = {
               ]),
               m('span.server-meta', [
                 serverGroup.server.server_region && m('span', serverGroup.server.server_region + ' '),
-                m('a', {
-                  class: 'record-domain-inline',
-                  href: this.buildDomainUrl(serverGroup.server.full_domain),
-                  target: '_blank',
-                  rel: 'noopener noreferrer'
-                }, serverGroup.server.full_domain),
+                m('span.inline-status-group', [
+                  m('a', {
+                    class: 'record-domain-inline',
+                    href: this.buildDomainUrl(serverGroup.server.full_domain),
+                    target: '_blank',
+                    rel: 'noopener noreferrer'
+                  }, serverGroup.server.full_domain),
+                  !serverGroup.server.active && this.renderStatusBadge('已暂停', 'paused'),
+                ]),
                 m('span', ' → ' + serverGroup.server.target_value),
               ]),
             ]),
@@ -293,12 +329,15 @@ const Dashboard = {
               m('.record-item', { key: record.id }, [
                 m('.record-info', [
                   m('.record-title', [
-                    m('a', {
-                      class: 'record-domain',
-                      href: this.buildDomainUrl(record.full_domain),
-                      target: '_blank',
-                      rel: 'noopener noreferrer'
-                    }, record.full_domain),
+                    m('.inline-status-group.record-domain-group', [
+                      m('a', {
+                        class: 'record-domain',
+                        href: this.buildDomainUrl(record.full_domain),
+                        target: '_blank',
+                        rel: 'noopener noreferrer'
+                      }, record.full_domain),
+                      !record.active && this.renderStatusBadge('已暂停', 'paused'),
+                    ]),
                     m('span.record-type', record.record_type),
                     m('span.record-target', '→ ' + record.target_value),
                   ]),
@@ -326,16 +365,19 @@ const Dashboard = {
               group.records.map(record =>
                 m('.record-item', { key: record.id }, [
                   m('.record-info', [
-                    m('.record-title', [
+                  m('.record-title', [
+                    m('.inline-status-group.record-domain-group', [
                       m('a', {
                         class: 'record-domain',
                         href: this.buildDomainUrl(record.full_domain),
                         target: '_blank',
                         rel: 'noopener noreferrer'
                       }, record.full_domain),
-                      m('span.record-type', record.record_type),
-                      m('span.record-target', '→ ' + record.target_value),
+                      !record.active && this.renderStatusBadge('已暂停', 'paused'),
                     ]),
+                    m('span.record-type', record.record_type),
+                    m('span.record-target', '→ ' + record.target_value),
+                  ]),
                     record.notes && m('span.record-notes', record.notes),
                   ]),
                   this.renderRecordActions(record),
@@ -350,6 +392,7 @@ const Dashboard = {
 
   renderRecordActions(record, options = {}) {
     const menuId = `record-${record.id}`
+    const canToggleStatus = this.supportsRecordStatusToggle(record.provider_id)
     return m('.record-actions', [
       m('button.action-trigger', {
         onclick: (e) => {
@@ -371,6 +414,12 @@ const Dashboard = {
               })
             }
           }, '编辑'),
+          canToggleStatus && m('button.action-item', {
+            onclick: () => {
+              this.closeMenu()
+              this.changeRecordStatus(record, !record.active)
+            }
+          }, record.active ? '暂停解析' : '恢复解析'),
           m('button.action-item', {
             onclick: () => {
               this.closeMenu()

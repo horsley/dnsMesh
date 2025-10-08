@@ -311,6 +311,7 @@ body {
 
 .record-domain {
   flex: 1;
+  min-width: 0;
 }
 
 .record-domain:hover,
@@ -342,6 +343,33 @@ body {
   color: var(--text-gray);
   font-size: 13px;
   margin-right: 10px;
+}
+
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1;
+}
+
+.status-badge--paused {
+  background: #fef3c7;
+  color: #92400e;
+  border: 1px solid #fcd34d;
+}
+
+.inline-status-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.record-domain-group {
+  flex: 1;
+  min-width: 0;
 }
 
 .record-notes {
