@@ -129,6 +129,20 @@ export const records = {
       withCredentials: true,
     }),
 
+  disable: (id) =>
+    m.request({
+      method: 'POST',
+      url: `${API_BASE}/records/${id}/disable`,
+      withCredentials: true,
+    }),
+
+  enable: (id) =>
+    m.request({
+      method: 'POST',
+      url: `${API_BASE}/records/${id}/enable`,
+      withCredentials: true,
+    }),
+
   import: (data) =>
     m.request({
       method: 'POST',

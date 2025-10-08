@@ -4,6 +4,7 @@ import (
 	"dnsmesh/internal/models"
 	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common"
 	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common/profile"
@@ -81,6 +82,11 @@ func (s *TencentCloudService) SyncRecords() ([]DNSRecordSync, error) {
 				ttl = int(*record.TTL)
 			}
 
+			isActive := true
+			if record.Status != nil && strings.ToUpper(*record.Status) == "DISABLE" {
+				isActive = false
+			}
+
 			allRecords = append(allRecords, DNSRecordSync{
 				ZoneID:           strconv.FormatUint(*domain.DomainId, 10),
 				ZoneName:         domainName,
@@ -88,6 +94,7 @@ func (s *TencentCloudService) SyncRecords() ([]DNSRecordSync, error) {
 				RecordType:       recordType,
 				TargetValue:      *record.Value,
 				TTL:              ttl,
+				Active:           isActive,
 				ProviderRecordID: strconv.FormatUint(*record.RecordId, 10),
 			})
 		}
@@ -180,6 +187,39 @@ func (s *TencentCloudService) DeleteRecord(record *models.DNSRecord) error {
 	_, err = client.DeleteRecord(req)
 	if err != nil {
 		return fmt.Errorf("failed to delete DNS record: %w", err)
+	}
+
+	return nil
+}
+
+// SetRecordStatus enables or disables a DNS record in DNSPod
+func (s *TencentCloudService) SetRecordStatus(record *models.DNSRecord, enabled bool) error {
+	client, err := s.getClient()
+	if err != nil {
+		return err
+	}
+
+	if record.ProviderRecordID == "" {
+		return fmt.Errorf("record missing provider record ID")
+	}
+
+	recordIDUint, err := strconv.ParseUint(record.ProviderRecordID, 10, 64)
+	if err != nil {
+		return fmt.Errorf("invalid record ID: %w", err)
+	}
+
+	req := dnspod.NewModifyRecordStatusRequest()
+	req.Domain = common.StringPtr(record.ZoneName)
+	req.RecordId = common.Uint64Ptr(recordIDUint)
+	status := "DISABLE"
+	if enabled {
+		status = "ENABLE"
+	}
+	req.Status = common.StringPtr(status)
+
+	_, err = client.ModifyRecordStatus(req)
+	if err != nil {
+		return fmt.Errorf("failed to modify record status: %w", err)
 	}
 
 	return nil

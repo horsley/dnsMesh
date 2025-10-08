@@ -4,6 +4,7 @@ import (
 	"dnsmesh/internal/database"
 	"dnsmesh/internal/models"
 	"dnsmesh/internal/services"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -145,6 +146,7 @@ func CreateRecord(c *gin.Context) {
 		ServerName:   req.ServerName,
 		ServerRegion: req.ServerRegion,
 		Notes:        req.Notes,
+		Active:       true,
 		Managed:      true,
 	}
 
@@ -364,6 +366,92 @@ func DeleteRecord(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Record deleted successfully"})
 }
 
+// DisableRecord disables a DNS record at the provider level if supported
+func DisableRecord(c *gin.Context) {
+	toggleRecordStatus(c, false)
+}
+
+// EnableRecord re-enables a DNS record at the provider level if supported
+func EnableRecord(c *gin.Context) {
+	toggleRecordStatus(c, true)
+}
+
+func toggleRecordStatus(c *gin.Context, enabled bool) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid record ID"})
+		return
+	}
+
+	var record models.DNSRecord
+	if err := database.DB.First(&record, id).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Record not found"})
+		return
+	}
+
+	if record.ProviderRecordID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Record has no provider reference"})
+		return
+	}
+
+	if record.Active == enabled {
+		message := "Record already active"
+		if !enabled {
+			message = "Record already disabled"
+		}
+		c.JSON(http.StatusOK, gin.H{
+			"message": message,
+			"record":  record,
+		})
+		return
+	}
+
+	var provider models.Provider
+	if err := database.DB.First(&provider, record.ProviderID).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Provider not found"})
+		return
+	}
+
+	svc, err := getProviderService(&provider)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	if err := svc.SetRecordStatus(&record, enabled); err != nil {
+		if errors.Is(err, services.ErrRecordStatusNotSupported) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "当前 DNS 提供商暂不支持暂停解析记录"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update provider record status: " + err.Error()})
+		return
+	}
+
+	record.Active = enabled
+	if err := database.DB.Save(&record).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update record status"})
+		return
+	}
+
+	action := "enable"
+	message := "Record enabled successfully"
+	if !enabled {
+		action = "disable"
+		message = "Record disabled successfully"
+	}
+
+	logAudit(c, models.ActionUpdate, models.ResourceTypeRecord, record.ID, gin.H{
+		"domain":      record.FullDomain,
+		"record_type": record.RecordType,
+		"action":      action,
+	})
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": message,
+		"record":  record,
+	})
+}
+
 // ImportRecords batch imports DNS records
 func ImportRecords(c *gin.Context) {
 	var req ImportRecordsRequest
@@ -532,12 +620,14 @@ func ReanalyzeRecords(c *gin.Context) {
 			wasHidden := !record.Managed
 			contentChanged := record.TargetValue != rwp.Record.TargetValue ||
 				record.TTL != rwp.Record.TTL ||
-				record.ZoneName != rwp.Record.ZoneName
+				record.ZoneName != rwp.Record.ZoneName ||
+				record.Active != rwp.Record.Active
 
 			record.TargetValue = rwp.Record.TargetValue
 			record.TTL = rwp.Record.TTL
 			record.ZoneName = rwp.Record.ZoneName
 			record.ProviderRecordID = rwp.Record.ProviderRecordID
+			record.Active = rwp.Record.Active
 
 			// If was hidden and content hasn't changed, keep it hidden
 			// If was hidden but content changed, re-import it (set managed = true)
@@ -578,6 +668,7 @@ func ReanalyzeRecords(c *gin.Context) {
 				RecordType:       rwp.Record.RecordType,
 				TargetValue:      rwp.Record.TargetValue,
 				TTL:              rwp.Record.TTL,
+				Active:           rwp.Record.Active,
 				ProviderRecordID: rwp.Record.ProviderRecordID,
 				Managed:          true,
 				IsServer:         false,

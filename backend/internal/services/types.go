@@ -1,6 +1,13 @@
 package services
 
-import "dnsmesh/internal/models"
+import (
+	"errors"
+
+	"dnsmesh/internal/models"
+)
+
+// ErrRecordStatusNotSupported indicates the provider cannot toggle record status
+var ErrRecordStatusNotSupported = errors.New("provider does not support toggling record status")
 
 // DNSRecordSync represents a DNS record fetched from provider
 type DNSRecordSync struct {
@@ -10,6 +17,7 @@ type DNSRecordSync struct {
 	RecordType       string `json:"record_type"`
 	TargetValue      string `json:"target_value"`
 	TTL              int    `json:"ttl"`
+	Active           bool   `json:"active"`
 	ProviderRecordID string `json:"provider_record_id"`
 }
 
@@ -31,11 +39,17 @@ type AnalysisResult struct {
 	ServerSuggestions []ServerSuggestion `json:"server_suggestions"`
 }
 
+// ProviderCapabilities describe optional abilities of a provider
+type ProviderCapabilities struct {
+	SupportsRecordStatusToggle bool `json:"supports_record_status_toggle"`
+}
+
 // DNSProvider interface for different DNS providers
 type DNSProvider interface {
 	SyncRecords() ([]DNSRecordSync, error)
 	CreateRecord(record *models.DNSRecord) (string, error)
 	UpdateRecord(record *models.DNSRecord) error
 	DeleteRecord(record *models.DNSRecord) error
+	SetRecordStatus(record *models.DNSRecord, enabled bool) error
 	TestConnection() error
 }

@@ -56,6 +56,7 @@ func (s *CloudflareService) SyncRecords() ([]DNSRecordSync, error) {
 				RecordType:       record.Type,
 				TargetValue:      record.Content,
 				TTL:              record.TTL,
+				Active:           true,
 				ProviderRecordID: record.ID,
 			})
 		}
@@ -128,6 +129,11 @@ func (s *CloudflareService) DeleteRecord(record *models.DNSRecord) error {
 	}
 
 	return nil
+}
+
+// SetRecordStatus is not supported for Cloudflare (no disable feature)
+func (s *CloudflareService) SetRecordStatus(record *models.DNSRecord, enabled bool) error {
+	return ErrRecordStatusNotSupported
 }
 
 // TestConnection tests the API connection

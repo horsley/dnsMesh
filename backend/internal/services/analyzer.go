@@ -194,8 +194,9 @@ type UnassignedGroup struct {
 
 // GroupedRecords represents the top-level grouping structure (server-first)
 type GroupedRecords struct {
-	Servers           []ServerGroup     `json:"servers"`
-	UnassignedRecords []UnassignedGroup `json:"unassigned_records"`
+	Servers              []ServerGroup                 `json:"servers"`
+	UnassignedRecords    []UnassignedGroup             `json:"unassigned_records"`
+	ProviderCapabilities map[uint]ProviderCapabilities `json:"provider_capabilities"`
 }
 
 // GroupRecords groups DNS records by server first, then unassigned records by provider
@@ -204,6 +205,11 @@ func GroupRecords(records []models.DNSRecord, providers []models.Provider) Group
 	providerMap := make(map[uint]models.Provider)
 	for _, p := range providers {
 		providerMap[p.ID] = p
+	}
+
+	capabilities := make(map[uint]ProviderCapabilities)
+	for _, p := range providers {
+		capabilities[p.ID] = GetProviderCapabilities(p)
 	}
 
 	// Separate ALL servers and non-servers across all providers
@@ -367,7 +373,21 @@ func GroupRecords(records []models.DNSRecord, providers []models.Provider) Group
 	}
 
 	return GroupedRecords{
-		Servers:           serverGroups,
-		UnassignedRecords: unassignedGroups,
+		Servers:              serverGroups,
+		UnassignedRecords:    unassignedGroups,
+		ProviderCapabilities: capabilities,
+	}
+}
+
+// GetProviderCapabilities returns capability flags for a provider
+func GetProviderCapabilities(provider models.Provider) ProviderCapabilities {
+	supportsStatusToggle := false
+	switch provider.Name {
+	case models.ProviderTencentCloud:
+		supportsStatusToggle = true
+	}
+
+	return ProviderCapabilities{
+		SupportsRecordStatusToggle: supportsStatusToggle,
 	}
 }

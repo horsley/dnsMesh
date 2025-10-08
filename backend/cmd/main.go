@@ -91,6 +91,8 @@ func main() {
 		protected.POST("/records", handlers.CreateRecord)
 		protected.PUT("/records/:id", handlers.UpdateRecord)
 		protected.POST("/records/:id/hide", handlers.HideRecord)
+		protected.POST("/records/:id/disable", handlers.DisableRecord)
+		protected.POST("/records/:id/enable", handlers.EnableRecord)
 		protected.DELETE("/records/:id", handlers.DeleteRecord)
 		protected.POST("/records/import", handlers.ImportRecords)
 		protected.POST("/records/reanalyze", handlers.ReanalyzeRecords)

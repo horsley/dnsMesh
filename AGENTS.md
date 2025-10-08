@@ -7,7 +7,7 @@
 
 ## Build, Test, and Development Commands
 - **Provision DB**: `docker-compose up -d postgres` starts the required PostgreSQL instance.
-- **Run backend**: `cd backend && go mod tidy && go run cmd/main.go` refreshes modules and serves the API on `localhost:8080`.
+- **Run backend**: `cd backend && go mod tidy && go run cmd/main.go` refreshes modules and serves the API on `localhost:8080`. Because the backend is a server process listening on port 8080 and it's a long-running process which will not exit, be careful not to run the backend server directly without nohup or any other process manager to avoid blocking the terminal or agent conversation context.
 - **Run frontend**: `cd frontend && npm install && npm run dev` launches the Vite dev server on `localhost:3000`.
 - **Backend tests**: `cd backend && go test ./...` executes Go unit tests; narrow packages when iterating.
 - **Smoke tests**: `./test.sh` validates auth, provider, record, and audit endpoints against a running backend.
