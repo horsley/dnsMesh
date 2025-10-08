@@ -1,0 +1,48 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: dnsmesh-db
+    environment:
+      POSTGRES_USER: dnsmesh
+      POSTGRES_PASSWORD: dnsmesh_password
+      POSTGRES_DB: dnsmesh
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dnsmesh"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: dnsmesh-backend
+    environment:
+      - PORT=8080
+      - GIN_MODE=release
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_USER=dnsmesh
+      - DB_PASSWORD=dnsmesh_password
+      - DB_NAME=dnsmesh
+      - DB_SSLMODE=disable
+      - SESSION_SECRET=your-secret-key-change-this-in-production
+      - ADMIN_USERNAME=admin
+      - ADMIN_PASSWORD=admin123
+      - ENCRYPTION_KEY=12345678901234567890123456789012
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./backend/public:/app/public
+
+volumes:
+  postgres_data:
