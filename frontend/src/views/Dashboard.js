@@ -304,7 +304,7 @@ const Dashboard = {
                   ]),
                   record.notes && m('span.record-notes', record.notes),
                 ]),
-                this.renderRecordActions(record),
+                this.renderRecordActions(record, { associatedServerId: serverGroup.server.id }),
               ])
             )
           ),
@@ -348,7 +348,7 @@ const Dashboard = {
     ]
   },
 
-  renderRecordActions(record) {
+  renderRecordActions(record, options = {}) {
     const menuId = `record-${record.id}`
     return m('.record-actions', [
       m('button.action-trigger', {
@@ -364,7 +364,11 @@ const Dashboard = {
           m('button.action-item', {
             onclick: () => {
               this.closeMenu()
-              this.openRecordForm({ type: 'edit', record })
+              this.openRecordForm({
+                type: 'edit',
+                record,
+                associatedServerId: options.associatedServerId ?? null,
+              })
             }
           }, '编辑'),
           m('button.action-item', {

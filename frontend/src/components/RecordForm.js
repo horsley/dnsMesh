@@ -34,6 +34,7 @@ const RecordForm = {
     this.hasCustomTarget = false
     this.serverOptions = []
     this.prevContext = null
+    this.previousSelectedTargetServerId = null
   },
 
   reset(vnode) {
@@ -42,6 +43,7 @@ const RecordForm = {
     this.loading = false
     this.error = ''
     this.hasCustomTarget = false
+    this.previousSelectedTargetServerId = null
 
     if (context?.type === 'edit' && context.record) {
       const record = context.record
@@ -51,8 +53,37 @@ const RecordForm = {
       this.targetValue = record.target_value || ''
       this.ttl = record.ttl || 600
       this.notes = record.notes || ''
-      this.useCustomTarget = true
-      this.selectedTargetServerId = null
+      const associatedId = context.associatedServerId
+      const parsedId = associatedId === undefined || associatedId === null
+        ? null
+        : Number(associatedId)
+      this.selectedTargetServerId = Number.isNaN(parsedId) ? null : parsedId
+      if (this.selectedTargetServerId !== null) {
+        this.useCustomTarget = false
+        const server = this.getTargetServer()
+        if (server) {
+          const defaultTarget = this.recordType === 'CNAME'
+            ? server.full_domain
+            : server.target_value
+          const normalizedRecordTarget = this.recordType === 'CNAME' && this.targetValue?.endsWith('.')
+            ? this.targetValue.slice(0, -1)
+            : this.targetValue
+          const normalizedDefaultTarget = this.recordType === 'CNAME' && defaultTarget?.endsWith('.')
+            ? defaultTarget.slice(0, -1)
+            : defaultTarget
+          this.hasCustomTarget = normalizedRecordTarget !== normalizedDefaultTarget
+          if (!this.hasCustomTarget) {
+            this.targetValue = defaultTarget
+          }
+        } else {
+          this.useCustomTarget = true
+          this.selectedTargetServerId = null
+          this.hasCustomTarget = true
+        }
+      } else {
+        this.useCustomTarget = true
+        this.hasCustomTarget = true
+      }
     } else {
       this.isEditMode = false
       this.fullDomain = ''
@@ -70,7 +101,7 @@ const RecordForm = {
   },
 
   getTargetServer() {
-    if (!this.selectedTargetServerId) return null
+    if (this.selectedTargetServerId === null || this.selectedTargetServerId === undefined) return null
     return (this.serverOptions || []).find(server => server.id === this.selectedTargetServerId)
   },
 
@@ -93,7 +124,7 @@ const RecordForm = {
     try {
       if (this.isEditMode && context.record) {
         const record = context.record
-        await records.update(record.id, {
+        const payload = {
           provider_id: record.provider_id,
           zone_id: record.zone_id,
           zone_name: record.zone_name,
@@ -102,7 +133,23 @@ const RecordForm = {
           target_value: this.targetValue,
           ttl: this.ttl,
           notes: this.notes,
-        })
+        }
+
+        if (!this.useCustomTarget) {
+          const selectedServer = this.getTargetServer()
+          if (!selectedServer) {
+            this.error = '请选择可用的指向目标'
+            this.loading = false
+            m.redraw()
+            return
+          }
+
+          payload.target_value = this.recordType === 'CNAME'
+            ? selectedServer.full_domain
+            : selectedServer.target_value
+        }
+
+        await records.update(record.id, payload)
       } else {
         const payload = {
           full_domain: this.fullDomain,
@@ -153,11 +200,13 @@ const RecordForm = {
   handleTargetServerChange(value) {
     const parsed = value === '' ? null : Number(value)
     if (parsed === null || Number.isNaN(parsed)) {
+      this.previousSelectedTargetServerId = this.selectedTargetServerId
       this.selectedTargetServerId = null
       this.useCustomTarget = true
       return
     }
 
+    this.previousSelectedTargetServerId = parsed
     this.selectedTargetServerId = parsed
     this.useCustomTarget = false
     this.hasCustomTarget = false
@@ -169,10 +218,13 @@ const RecordForm = {
     this.useCustomTarget = nextValue
 
     if (nextValue) {
+      this.previousSelectedTargetServerId = this.selectedTargetServerId
       this.selectedTargetServerId = null
       this.hasCustomTarget = true
     } else {
-      const fallbackId = this.selectedTargetServerId || this.serverOptions[0]?.id || null
+      const previousId = this.previousSelectedTargetServerId
+      const hasPrevious = previousId !== null && this.serverOptions.some(server => server.id === previousId)
+      const fallbackId = hasPrevious ? previousId : this.serverOptions[0]?.id || null
       this.selectedTargetServerId = fallbackId !== null ? Number(fallbackId) : null
       this.hasCustomTarget = false
       this.applyDefaultTarget(true)
@@ -195,7 +247,7 @@ const RecordForm = {
     const hasServers = (this.serverOptions || []).length > 0
 
     const targetControl = () => {
-      if (this.useCustomTarget || !hasServers || this.isEditMode) {
+      if (this.useCustomTarget || !hasServers) {
         return m('input', {
           type: 'text',
           value: this.targetValue,
@@ -274,7 +326,7 @@ const RecordForm = {
         targetControl()
       ]),
 
-      !this.isEditMode && hasServers && m('.form-group', {
+      hasServers && m('.form-group', {
         style: 'margin-top: -10px;'
       }, [
         m('label', {
