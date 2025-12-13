@@ -1,0 +1,69 @@
+# Git
+.git
+.gitignore
+
+# Documentation
+*.md
+AGENTS.md
+CLAUDE.md
+PROJECT_SUMMARY.md
+QUICK_START.md
+
+# IDE and editor files
+.vscode
+.idea
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Claude and other AI tools
+.claude
+.codex
+.serena
+
+# Node modules
+node_modules
+frontend/node_modules
+
+# Go build cache
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+backend/dnsmesh
+bin/
+
+# Test files
+*_test.go
+*.test
+
+# Logs
+*.log
+logs/
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Temporary files
+tmp/
+temp/
+
+# Nixpacks (we're replacing it with Dockerfile)
+nixpacks.toml
+
+# Docker files (except the main one)
+docker-compose.yml
+docker-compose.*.yml
+backend/Dockerfile

@@ -20,7 +20,7 @@ services:
 
   backend:
     build:
-      context: ./backend
+      context: .
       dockerfile: Dockerfile
     container_name: dnsmesh-backend
     environment:
@@ -41,8 +41,6 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-    volumes:
-      - ./backend/public:/app/public
 
 volumes:
   postgres_data:
