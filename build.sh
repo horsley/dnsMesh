@@ -8,6 +8,7 @@ set -e
 
 echo "🏗️  Building DNSMesh application with Docker..."
 echo "📡 Using Tencent Cloud mirrors for faster package installation..."
+echo "🚀 Using goproxy.cn for faster Go module downloads..."
 
 # Build the Docker image
 echo "📦 Building Docker image..."

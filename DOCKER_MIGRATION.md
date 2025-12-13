@@ -56,6 +56,14 @@ docker-compose up --build
 
 每个构建阶段都会自动将 Alpine 包源替换为腾讯云镜像源，显著提升包下载速度。
 
+## Go 模块代理优化
+
+在 Go 构建阶段配置了以下环境变量：
+- `GOPROXY=https://goproxy.cn,direct` - 使用国内 Go 模块代理
+- `GOSUMDB=sum.golang.google.cn` - 使用国内校验和数据库
+
+这将大幅提升 Go 依赖包的下载速度，特别是在国内网络环境下。
+
 ## 运行应用
 
 ```bash

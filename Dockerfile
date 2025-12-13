@@ -27,6 +27,10 @@ RUN sed -i 's/dl-cdn.alpinelinux.org/mirrors.cloud.tencent.com/g' /etc/apk/repos
 # Install build dependencies
 RUN apk add --no-cache git
 
+# Configure Go proxy for faster dependency download
+ENV GOPROXY=https://goproxy.cn,direct
+ENV GOSUMDB=sum.golang.google.cn
+
 # Copy go mod files
 COPY backend/go.mod backend/go.sum ./
 RUN go mod download
