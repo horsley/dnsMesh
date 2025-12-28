@@ -4,41 +4,10 @@ const API_BASE = '/api'
 
 // Auth API
 export const auth = {
-  login: (credentials) =>
-    m.request({
-      method: 'POST',
-      url: `${API_BASE}/auth/login`,
-      body: credentials,
-      withCredentials: true,
-    }),
-
-  logout: () =>
-    m.request({
-      method: 'POST',
-      url: `${API_BASE}/auth/logout`,
-      withCredentials: true,
-    }),
-
   getCurrentUser: () =>
     m.request({
       method: 'GET',
       url: `${API_BASE}/auth/user`,
-      withCredentials: true,
-    }),
-
-  changePassword: (data) =>
-    m.request({
-      method: 'POST',
-      url: `${API_BASE}/auth/change-password`,
-      body: data,
-      withCredentials: true,
-    }),
-
-  changeUsername: (data) =>
-    m.request({
-      method: 'POST',
-      url: `${API_BASE}/auth/change-username`,
-      body: data,
       withCredentials: true,
     }),
 }

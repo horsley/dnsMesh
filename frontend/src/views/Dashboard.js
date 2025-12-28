@@ -2,7 +2,6 @@ import m from 'mithril'
 import { auth, records } from '../services/api'
 import ProviderWizard from '../components/ProviderWizard'
 import RecordForm from '../components/RecordForm'
-import SettingsModal from '../components/SettingsModal'
 import AuditLogModal from '../components/AuditLogModal'
 
 const Dashboard = {
@@ -12,7 +11,6 @@ const Dashboard = {
   loading: true,
   providerCapabilities: {},
   showProviderWizard: false,
-  showSettings: false,
   showRecordForm: false,
   showAuditLogs: false,
   recordFormContext: null,
@@ -27,21 +25,19 @@ const Dashboard = {
     this.loading = true
 
     try {
-      // Load user info
-      const userStr = localStorage.getItem('user')
-      if (userStr) {
-        this.user = JSON.parse(userStr)
-      }
+      // Load user info from API
+      const response = await auth.getCurrentUser()
+      this.user = response.user
 
       // Load records (new server-first structure)
-      const response = await records.list()
-      this.servers = response.servers || []
-      this.unassignedRecords = response.unassigned_records || []
-      this.providerCapabilities = response.provider_capabilities || {}
+      const recordsResponse = await records.list()
+      this.servers = recordsResponse.servers || []
+      this.unassignedRecords = recordsResponse.unassigned_records || []
+      this.providerCapabilities = recordsResponse.provider_capabilities || {}
     } catch (error) {
       console.error('Failed to load data:', error)
       if (error.code === 401) {
-        m.route.set('/login')
+        alert('身份验证失败，请确保通过反向代理访问')
       }
     } finally {
       this.loading = false
@@ -93,16 +89,6 @@ const Dashboard = {
       await this.loadData()
     } catch (error) {
       alert(actionText + '失败: ' + (error.response?.error || error.message))
-    }
-  },
-
-  async handleLogout() {
-    try {
-      await auth.logout()
-      localStorage.removeItem('user')
-      m.route.set('/login')
-    } catch (error) {
-      console.error('Logout failed:', error)
     }
   },
 
@@ -158,14 +144,6 @@ const Dashboard = {
     }, label)
   },
 
-  handleUserUpdate(updatedUser) {
-    // Update user in component state
-    this.user = updatedUser
-    // Update user in localStorage
-    localStorage.setItem('user', JSON.stringify(updatedUser))
-    m.redraw()
-  },
-
   view() {
     return [
       // Header
@@ -176,13 +154,6 @@ const Dashboard = {
           m('h1', 'DNSMesh'),
           m('.header-actions', [
             m('.header-user', `欢迎, ${this.user?.username || 'User'}`),
-            m('button.btn.btn-secondary.btn-small', {
-              onclick: () => { this.showSettings = true },
-              style: 'margin-right: 10px;'
-            }, '⚙️ 设置'),
-            m('button.btn.btn-secondary.btn-small', {
-              onclick: () => this.handleLogout()
-            }, '退出登录'),
           ]),
         ]),
       ]),
@@ -239,12 +210,6 @@ const Dashboard = {
           this.showProviderWizard = false
           this.loadData()
         }
-      }),
-
-      this.showSettings && m(SettingsModal, {
-        user: this.user,
-        onClose: () => { this.showSettings = false },
-        onUserUpdate: (user) => this.handleUserUpdate(user),
       }),
 
       this.showRecordForm && m(RecordForm, {

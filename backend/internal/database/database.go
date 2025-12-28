@@ -40,11 +40,6 @@ func Initialize() error {
 		return fmt.Errorf("failed to run migrations: %w", err)
 	}
 
-	// Create default admin user if not exists
-	if err := createDefaultUser(); err != nil {
-		return fmt.Errorf("failed to create default user: %w", err)
-	}
-
 	// Clean up empty providers
 	if err := cleanupEmptyProviders(); err != nil {
 		return fmt.Errorf("failed to cleanup empty providers: %w", err)
@@ -58,7 +53,6 @@ func migrate() error {
 	log.Println("Running database migrations...")
 
 	err := DB.AutoMigrate(
-		&models.User{},
 		&models.Provider{},
 		&models.DNSRecord{},
 		&models.AuditLog{},
@@ -69,33 +63,6 @@ func migrate() error {
 	}
 
 	log.Println("Migrations completed successfully")
-	return nil
-}
-
-// createDefaultUser creates the default admin user if it doesn't exist
-func createDefaultUser() error {
-	var count int64
-	DB.Model(&models.User{}).Count(&count)
-
-	if count == 0 {
-		username := getEnv("ADMIN_USERNAME", "admin")
-		password := getEnv("ADMIN_PASSWORD", "admin")
-
-		user := models.User{
-			Username: username,
-		}
-
-		if err := user.HashPassword(password); err != nil {
-			return err
-		}
-
-		if err := DB.Create(&user).Error; err != nil {
-			return err
-		}
-
-		log.Printf("Default admin user created: %s", username)
-	}
-
 	return nil
 }
 

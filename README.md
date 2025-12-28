@@ -8,20 +8,20 @@ DNSMesh 是一套面向开发者的自托管域名解析运营平台，提供多
 
 - **多云接入**：内置 Cloudflare 与腾讯云 DNSPod 连接器，可在创建 Provider 时自动校验凭证并首轮同步所有解析记录。
 - **凭证加密存储**：通过 AES-256-GCM 对 API Token、Secret 等敏感信息进行加密，密钥由 `ENCRYPTION_KEY` 环境变量提供。
-- **服务器优先视图**：后端的智能分析服务会根据域名模式、CNAME 引用与 IP 复用情况自动归类服务器，前端以“服务器卡片 + 快速添加”方式呈现。
-- **批量导入与重新分析**：连接器同步的记录可在导入向导中挑选批量入库；支持一键“重新分析”来重新同步所有 Provider 并刷新服务器分组。
+- **服务器优先视图**：后端的智能分析服务会根据域名模式、CNAME 引用与 IP 复用情况自动归类服务器，前端以"服务器卡片 + 快速添加"方式呈现。
+- **批量导入与重新分析**：连接器同步的记录可在导入向导中挑选批量入库；支持一键"重新分析"来重新同步所有 Provider 并刷新服务器分组。
 - **精细化记录管理**：支持新建、编辑、隐藏（脱管）与删除解析记录；隐藏操作会保留数据库记录但停止纳管，便于回溯。
-- **安全的会话机制**：使用基于 Cookie 的会话与中间件保护所有 `/api` 下敏感接口，并提供用户名、密码修改入口。
+- **反向代理认证**：通过 Remote-User HTTP 头部进行身份认证，兼容前向鉴权的反向代理（如 Nginx Auth Request、OAuth2 Proxy 等）。
 - **审计日志**：对 Provider 与解析记录的增删改、同步等操作留痕，可按资源类型、动作过滤并分页查询。
 - **API 优先设计**：前端通过轻量的 Mithril 服务层消费 REST API，便于后续接入 CLI 或其他自动化工具。
 
 ## 🧱 系统架构
 
-- **后端**：Go 1.21、Gin、GORM、PostgreSQL。入口位于 `backend/cmd/main.go`，核心逻辑分层于 `internal/{handlers,services,models,middleware,database}`，并使用 Cookie Session 存储登录态。
+- **后端**：Go 1.21、Gin、GORM、PostgreSQL。入口位于 `backend/cmd/main.go`，核心逻辑分层于 `internal/{handlers,services,models,middleware,database}`，使用 Remote-User 头部进行身份认证。
 - **服务层**：`internal/services` 封装各云厂商 SDK；`AnalyzeDNSRecords` 用于模式识别与服务器分组，所有 Provider 共用 `DNSProvider` 接口实现统一的同步、增删改删除协议。
 - **加密模块**：`pkg/crypto` 负责初始化与执行 AES-256-GCM 加解密，保证凭据落库前被加密。
 - **前端**：基于 Vite 与 Mithril 构建的单页应用，组件划分为 `views`（页面）、`components`（弹窗/卡片）、`services/api.js`（API 适配层）以及 `styles/main.css`（全局样式）。
-- **静态资源分发**：前端构建产物位于 `backend/public`，由 Gin 直接作为静态文件提供，实现“一体化”部署。
+- **静态资源分发**：前端构建产物位于 `backend/public`，由 Gin 直接作为静态文件提供，实现"一体化"部署。
 
 ```
 ┌────────────┐      ┌────────────────┐
@@ -29,10 +29,11 @@ DNSMesh 是一套面向开发者的自托管域名解析运营平台，提供多
 │  (Mithril) │     │ (Gin Handlers)  │  │
 └────────────┘      └────────────────┘  │
         ▲                     │          │
-        │ Cookies             ▼          ▼
+        │ Remote-User Header  ▼          ▼
  ┌────────────┐       ┌──────────────┐┌─────────────┐
- │User Session│◀────▶│ GORM + Postgres││Provider SDK│
- └────────────┘       └──────────────┘└─────────────┘
+ │   Reverse  │◀────▶│ GORM + Postgres││Provider SDK│
+ │   Proxy    │       └──────────────┘└─────────────┘
+ └────────────┘
 ```
 
 ## 🚀 快速上手
@@ -61,7 +62,7 @@ DNSMesh 是一套面向开发者的自托管域名解析运营平台，提供多
    ```bash
    cd backend
    cp .env.example .env
-   # 按需修改数据库连接、SESSION_SECRET、ADMIN_*、ENCRYPTION_KEY 等变量
+   # 按需修改数据库连接、ENCRYPTION_KEY 等变量
    ```
 
 4. **运行后端 API**
@@ -69,7 +70,7 @@ DNSMesh 是一套面向开发者的自托管域名解析运营平台，提供多
    go mod tidy
    go run cmd/main.go
    ```
-   服务默认监听 `http://localhost:8080`，首次启动会自动迁移数据库并创建默认管理员账号。
+   服务默认监听 `http://localhost:8080`，首次启动会自动迁移数据库。
 
 5. **运行前端开发服务器**
    ```bash
@@ -85,7 +86,7 @@ DNSMesh 是一套面向开发者的自托管域名解析运营平台，提供多
 
 1. 在 `frontend` 目录执行 `npm run build`，构建产物会写入 `frontend/dist`。
 2. 将 `frontend/dist` 内容拷贝至 `backend/public`（Vite 构建时也可以直接指定输出路径到 `../backend/public`）。
-3. 准备生产环境 `.env` 并确保 `GIN_MODE=release`、`SESSION_SECRET` 与 `ENCRYPTION_KEY` 均为强随机值。
+3. 准备生产环境 `.env` 并确保 `GIN_MODE=release` 与 `ENCRYPTION_KEY` 为强随机值。
 4. 运行后端二进制或使用下方 Docker Compose 模式。
 
 ## 🔧 环境变量
@@ -100,16 +101,13 @@ DNSMesh 是一套面向开发者的自托管域名解析运营平台，提供多
 | `DB_PASSWORD` | _(空)_ | 数据库密码 |
 | `DB_NAME` | `dnsmesh` | 数据库名称 |
 | `DB_SSLMODE` | `disable` | PostgreSQL SSL 模式 |
-| `SESSION_SECRET` | `default-secret-change-in-production` | Cookie 会话加密密钥，请在生产环境务必替换 |
-| `ADMIN_USERNAME` | `admin` | 首次启动创建的管理员用户名 |
-| `ADMIN_PASSWORD` | `admin` | 首次启动创建的管理员密码（仅当数据库无用户时生效） |
 | `ENCRYPTION_KEY` | _(必填)_ | 32 字节字符串，用于 AES-256-GCM 加密 Provider 凭据，未设置会导致应用启动失败 |
 
 ## 🐳 Docker Compose 部署
 
 项目根目录提供 `docker-compose.yml`：
 
-1. 修改 `docker-compose.yml` 中 `backend` 服务的环境变量，确保 `SESSION_SECRET`、`ADMIN_PASSWORD`、`ENCRYPTION_KEY` 等符合生产要求。
+1. 修改 `docker-compose.yml` 中 `backend` 服务的环境变量，确保 `ENCRYPTION_KEY` 符合生产要求。
 2. 构建前端并将产物放入 `backend/public`。
 3. 执行：
    ```bash
@@ -133,13 +131,13 @@ dnsmesh/
 │   │   ├── handlers/       # HTTP 路由处理器
 │   │   ├── services/       # 业务逻辑 & Provider 接入
 │   │   ├── models/         # GORM 模型
-│   │   ├── middleware/     # Gin 中间件
-│   │   └── database/       # 连接、迁移、默认用户
+│   │   ├── middleware/     # Gin 中间件 (Remote-User 认证)
+│   │   └── database/       # 连接与迁移
 │   ├── pkg/crypto/         # AES 加密工具
 │   └── public/             # 前端打包产物
 ├── frontend/
 │   ├── src/
-│   │   ├── views/          # 页面视图 (Login, Dashboard)
+│   │   ├── views/          # 页面视图 (Dashboard)
 │   │   ├── components/     # 弹窗、表单、向导
 │   │   ├── services/       # API 请求封装
 │   │   └── styles/         # Tailwind 风格的手写样式
@@ -152,14 +150,10 @@ dnsmesh/
 
 ## 🌐 API 概览
 
-所有除 `/api/auth/login` 以外的接口均需在成功登录后携带会话 Cookie (`withCredentials: true`) 才能访问。
+所有接口均需通过反向代理携带 `Remote-User` HTTP 头部才能访问（`withCredentials: true`）。
 
 ### 认证
-- `POST /api/auth/login`：用户名密码登录。
-- `POST /api/auth/logout`：退出登录并清除会话。
-- `GET /api/auth/user`：获取当前登录用户信息。
-- `POST /api/auth/change-password`：修改密码。
-- `POST /api/auth/change-username`：修改用户名并刷新会话。
+- `GET /api/auth/user`：获取当前用户信息（从 Remote-User 头部）。
 
 ### DNS 提供商
 - `GET /api/providers`：获取 Provider 列表（敏感字段会被清空）。
@@ -169,7 +163,7 @@ dnsmesh/
 - `POST /api/providers/:id/sync`：同步指定 Provider 的全部解析记录并返回分析结果。
 
 ### DNS 记录
-- `GET /api/records`：返回“服务器优先 + 未分组”结构的解析记录。
+- `GET /api/records`：返回"服务器优先 + 未分组"结构的解析记录。
 - `POST /api/records`：为已知服务器创建新的解析记录（自动推断 Zone 和 Provider）。
 - `PUT /api/records/:id`：更新解析记录，若关键字段变化会同步至 Provider。
 - `POST /api/records/:id/hide`：将记录标记为不再纳管（仅软删除）。
@@ -186,13 +180,11 @@ dnsmesh/
 - **服务器卡片视图**：展示每台服务器的主记录、关联域名与快速操作（添加、隐藏、删除）。
 - **未分组记录区**：按 Provider 聚合未能匹配服务器的记录，便于后续补充元数据或隐藏。
 - **重新分析入口**：位于工具栏，可触发后端对所有 Provider 再次同步并更新服务器识别结果。
-- **账户设置弹窗**：支持修改用户名与密码，更新后本地存储与会话信息会同步刷新。
 
 ## 🔐 安全实践
 
-- 生产环境必须设置强随机的 `SESSION_SECRET` 与 32 字节 `ENCRYPTION_KEY`。
-- 默认管理员仅在用户表为空时创建，部署后请立即修改用户名与密码或禁用默认账号。
-- 建议在 HTTPS 环境下运行并将 `cookie` 的 `Secure` 选项设为 `true`（可在 `main.go` 中根据部署情况调整）。
+- 生产环境必须设置强随机的 32 字节 `ENCRYPTION_KEY`。
+- 建议在反向代理层实施 TLS 终止，确保 HTTP 请求安全传输。
 - 对 Provider 凭据的备份需谨慎处理，避免将 `.env` 与数据库明文导出。
 
 ## 🗺️ 路线图

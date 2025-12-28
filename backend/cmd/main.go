@@ -8,8 +8,6 @@ import (
 	"log"
 	"os"
 
-	"github.com/gin-contrib/sessions"
-	"github.com/gin-contrib/sessions/cookie"
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
 )
@@ -52,33 +50,13 @@ func main() {
 		c.Next()
 	})
 
-	// Setup sessions
-	sessionSecret := os.Getenv("SESSION_SECRET")
-	if sessionSecret == "" {
-		sessionSecret = "default-secret-change-in-production"
-	}
-	store := cookie.NewStore([]byte(sessionSecret))
-	store.Options(sessions.Options{
-		Path:     "/",
-		MaxAge:   86400 * 7, // 7 days
-		HttpOnly: true,
-		Secure:   false, // Set to true in production with HTTPS
-		SameSite: 1,
-	})
-	r.Use(sessions.Sessions("dnsmesh_session", store))
-
 	// Public routes
-	r.POST("/api/auth/login", handlers.Login)
+	r.GET("/api/auth/user", handlers.GetCurrentUser)
 
 	// Protected routes
 	protected := r.Group("/api")
 	protected.Use(middleware.AuthRequired())
 	{
-		protected.POST("/auth/logout", handlers.Logout)
-		protected.GET("/auth/user", handlers.GetCurrentUser)
-		protected.POST("/auth/change-password", handlers.ChangePassword)
-		protected.POST("/auth/change-username", handlers.ChangeUsername)
-
 		// Provider routes
 		protected.GET("/providers", handlers.GetProviders)
 		protected.POST("/providers", handlers.CreateProvider)

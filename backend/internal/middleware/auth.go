@@ -3,25 +3,25 @@ package middleware
 import (
 	"net/http"
 
-	"github.com/gin-contrib/sessions"
 	"github.com/gin-gonic/gin"
 )
 
-// AuthRequired is a middleware that checks if user is authenticated
+// AuthRequired is a middleware that checks Remote-User header for authentication
 func AuthRequired() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		session := sessions.Default(c)
-		userID := session.Get("user_id")
+		// Get username from Remote-User header (set by reverse proxy)
+		username := c.GetHeader("Remote-User")
 
-		if userID == nil {
+		if username == "" {
 			c.JSON(http.StatusUnauthorized, gin.H{
-				"error": "Authentication required",
+				"error": "Authentication required: Remote-User header not found",
 			})
 			c.Abort()
 			return
 		}
 
-		c.Set("user_id", userID)
+		// Set username in context
+		c.Set("username", username)
 		c.Next()
 	}
 }
