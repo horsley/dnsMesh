@@ -4,11 +4,22 @@ import (
 	"log"
 	"net/http"
 
+	"dnsmesh/internal/auth"
+
 	"github.com/gin-gonic/gin"
 )
 
 // GetCurrentUser returns the current authenticated user from Remote-User header
 func GetCurrentUser(c *gin.Context) {
+	if username, ok := auth.BypassUser(); ok {
+		c.JSON(http.StatusOK, gin.H{
+			"user": gin.H{
+				"username": username,
+			},
+		})
+		return
+	}
+
 	// Try multiple common header names for reverse proxy authentication
 	username := c.GetHeader("Remote-User")
 	if username == "" {

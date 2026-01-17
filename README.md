@@ -96,6 +96,8 @@ DNSMesh 是一套面向开发者的自托管域名解析运营平台，提供多
 | --- | --- | --- |
 | `PORT` | `8080` | 后端监听端口 |
 | `GIN_MODE` | `release` | Gin 运行模式（开发环境可设为 `debug`） |
+| `AUTH_BYPASS` | `false` | 本地调试时可设为 `true` 跳过 Remote-User 认证 |
+| `AUTH_BYPASS_USER` | `local-dev` | 认证跳过时返回的用户名 |
 | `SQLITE_PATH` | `data/dnsmesh.db` | SQLite 数据库存储路径 |
 | `DB_HOST` | `localhost` | Postgres 主机地址（迁移时使用） |
 | `DB_PORT` | `5432` | Postgres 端口（迁移时使用） |
@@ -152,7 +154,7 @@ dnsmesh/
 
 ## 🌐 API 概览
 
-所有接口均需通过反向代理携带 `Remote-User` HTTP 头部才能访问（`withCredentials: true`）。
+所有接口均需通过反向代理携带 `Remote-User` HTTP 头部才能访问（`withCredentials: true`）。本地调试可设置 `AUTH_BYPASS=true` 跳过身份验证。
 
 ### 认证
 - `GET /api/auth/user`：获取当前用户信息（从 Remote-User 头部）。

@@ -4,12 +4,20 @@ import (
 	"log"
 	"net/http"
 
+	"dnsmesh/internal/auth"
+
 	"github.com/gin-gonic/gin"
 )
 
 // AuthRequired is a middleware that checks Remote-User header for authentication
 func AuthRequired() gin.HandlerFunc {
 	return func(c *gin.Context) {
+		if username, ok := auth.BypassUser(); ok {
+			c.Set("username", username)
+			c.Next()
+			return
+		}
+
 		// Try multiple common header names for reverse proxy authentication
 		// Common headers: Remote-User, remote-user, X-Remote-User, X-Forwarded-User
 		username := c.GetHeader("Remote-User")
