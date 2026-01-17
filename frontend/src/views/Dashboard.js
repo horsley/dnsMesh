@@ -67,6 +67,29 @@ const Dashboard = {
     }
   },
 
+  async handleUnmarkServer(record) {
+    if (!confirm('确定要取消服务器标记吗？取消后将作为普通解析记录处理。')) return
+
+    try {
+      await records.update(record.id, {
+        provider_id: record.provider_id,
+        zone_id: record.zone_id,
+        zone_name: record.zone_name,
+        full_domain: record.full_domain,
+        record_type: record.record_type,
+        target_value: record.target_value,
+        ttl: record.ttl,
+        notes: record.notes || '',
+        is_server: false,
+        server_name: '',
+        server_region: '',
+      })
+      await this.loadData()
+    } catch (error) {
+      alert('取消服务器失败: ' + (error.response?.error || error.message))
+    }
+  },
+
   supportsRecordStatusToggle(providerId) {
     if (!providerId) return false
     const capability = this.providerCapabilities?.[providerId]
@@ -278,6 +301,12 @@ const Dashboard = {
                       this.openRecordForm({ type: 'create', serverId: serverGroup.server.id })
                     }
                   }, '添加关联域名'),
+                  m('button.action-item', {
+                    onclick: () => {
+                      this.closeMenu()
+                      this.handleUnmarkServer(serverGroup.server)
+                    }
+                  }, '取消服务器'),
                   m('button.action-item.danger', {
                     onclick: () => {
                       this.closeMenu()
@@ -379,6 +408,12 @@ const Dashboard = {
               })
             }
           }, '编辑'),
+          record.is_server && m('button.action-item', {
+            onclick: () => {
+              this.closeMenu()
+              this.handleUnmarkServer(record)
+            }
+          }, '取消服务器'),
           canToggleStatus && m('button.action-item', {
             onclick: () => {
               this.closeMenu()
