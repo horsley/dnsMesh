@@ -16,9 +16,9 @@ import (
 
 // CreateRecordRequest represents the request to create a DNS record
 type CreateRecordRequest struct {
-	ProviderID   uint   `json:"provider_id" binding:"required"`
-	ZoneID       string `json:"zone_id" binding:"required"`
-	ZoneName     string `json:"zone_name" binding:"required"`
+	ProviderID   uint   `json:"provider_id"`
+	ZoneID       string `json:"zone_id"`
+	ZoneName     string `json:"zone_name"`
 	FullDomain   string `json:"full_domain" binding:"required"`
 	RecordType   string `json:"record_type" binding:"required"`
 	TargetValue  string `json:"target_value" binding:"required"`
