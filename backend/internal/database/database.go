@@ -5,8 +5,10 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
+	"strings"
 
-	"gorm.io/driver/postgres"
+	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 )
@@ -15,23 +17,25 @@ var DB *gorm.DB
 
 // Initialize initializes the database connection
 func Initialize() error {
-	dsn := fmt.Sprintf(
-		"host=%s port=%s user=%s password=%s dbname=%s sslmode=%s",
-		getEnv("DB_HOST", "localhost"),
-		getEnv("DB_PORT", "5432"),
-		getEnv("DB_USER", "dnsmesh"),
-		getEnv("DB_PASSWORD", ""),
-		getEnv("DB_NAME", "dnsmesh"),
-		getEnv("DB_SSLMODE", "disable"),
-	)
+	sqlitePath := getEnv("SQLITE_PATH", "data/dnsmesh.db")
+	if err := ensureSQLiteDir(sqlitePath); err != nil {
+		return fmt.Errorf("failed to prepare sqlite directory: %w", err)
+	}
+	dsn := sqliteDSN(sqlitePath)
 
 	var err error
-	DB, err = gorm.Open(postgres.Open(dsn), &gorm.Config{
+	DB, err = gorm.Open(sqlite.Open(dsn), &gorm.Config{
 		Logger: logger.Default.LogMode(logger.Info),
 	})
 	if err != nil {
 		return fmt.Errorf("failed to connect to database: %w", err)
 	}
+
+	sqlDB, err := DB.DB()
+	if err != nil {
+		return fmt.Errorf("failed to access sqlite db handle: %w", err)
+	}
+	sqlDB.SetMaxOpenConns(1)
 
 	log.Println("Database connected successfully")
 
@@ -99,4 +103,33 @@ func getEnv(key, fallback string) string {
 		return value
 	}
 	return fallback
+}
+
+func ensureSQLiteDir(path string) error {
+	filePath := sqliteFilePath(path)
+	if filePath == ":memory:" {
+		return nil
+	}
+	dir := filepath.Dir(filePath)
+	if dir == "." || dir == "" {
+		return nil
+	}
+	return os.MkdirAll(dir, 0o755)
+}
+
+func sqliteFilePath(path string) string {
+	if idx := strings.Index(path, "?"); idx >= 0 {
+		return path[:idx]
+	}
+	return path
+}
+
+func sqliteDSN(path string) string {
+	if strings.Contains(path, "_fk=") {
+		return path
+	}
+	if strings.Contains(path, "?") {
+		return path + "&_fk=1"
+	}
+	return path + "?_fk=1"
 }

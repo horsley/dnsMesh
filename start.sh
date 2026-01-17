@@ -2,19 +2,21 @@
 
 echo "🚀 启动 DNSMesh 系统..."
 
-# 检查 Docker
-if ! command -v podman &> /dev/null; then
-    echo "❌ Docker 未安装，请先安装 Docker"
-    exit 1
+# 准备 SQLite 数据库（如需要则从 Postgres 迁移）
+ROOT_DIR="$(pwd)"
+SQLITE_PATH="${SQLITE_PATH:-$ROOT_DIR/backend/data/dnsmesh.db}"
+if [ ! -f "$SQLITE_PATH" ]; then
+    echo "🗄️  未找到 SQLite 数据库，尝试从 Postgres 迁移..."
+    if command -v go &> /dev/null; then
+        if ! (cd backend && SQLITE_PATH="$SQLITE_PATH" go run cmd/migrate_sqlite/main.go); then
+            echo "❌ 迁移失败，请检查 Postgres 连接配置"
+            exit 1
+        fi
+    else
+        echo "❌ Go 未安装，无法执行迁移"
+        exit 1
+    fi
 fi
-
-# 启动数据库
-echo "📦 启动 PostgreSQL 数据库..."
-docker-compose up -d postgres
-
-# 等待数据库就绪
-echo "⏳ 等待数据库就绪..."
-sleep 5
 
 # 安装后端依赖
 echo "📥 安装后端依赖..."
@@ -28,7 +30,7 @@ fi
 # 启动后端
 echo "🔧 启动后端服务..."
 if command -v go &> /dev/null; then
-    go run cmd/main.go &
+    SQLITE_PATH="$SQLITE_PATH" go run cmd/main.go &
     BACKEND_PID=$!
     echo "✅ 后端服务已启动 (PID: $BACKEND_PID)"
 else

@@ -193,7 +193,7 @@ blog.example.com
 
 ### Q4: 数据存储在哪里？
 
-**A**: 数据存储在本地 PostgreSQL 数据库中，包括:
+**A**: 数据存储在本地 SQLite 数据库中，包括:
 - DNS 记录信息
 - Provider credentials（加密存储）
 - 操作日志

@@ -17,7 +17,7 @@ DNSMesh 是一套面向开发者的自托管域名解析运营平台，提供多
 
 ## 🧱 系统架构
 
-- **后端**：Go 1.21、Gin、GORM、PostgreSQL。入口位于 `backend/cmd/main.go`，核心逻辑分层于 `internal/{handlers,services,models,middleware,database}`，使用 Remote-User 头部进行身份认证。
+- **后端**：Go 1.21、Gin、GORM、SQLite。入口位于 `backend/cmd/main.go`，核心逻辑分层于 `internal/{handlers,services,models,middleware,database}`，使用 Remote-User 头部进行身份认证。
 - **服务层**：`internal/services` 封装各云厂商 SDK；`AnalyzeDNSRecords` 用于模式识别与服务器分组，所有 Provider 共用 `DNSProvider` 接口实现统一的同步、增删改删除协议。
 - **加密模块**：`pkg/crypto` 负责初始化与执行 AES-256-GCM 加解密，保证凭据落库前被加密。
 - **前端**：基于 Vite 与 Mithril 构建的单页应用，组件划分为 `views`（页面）、`components`（弹窗/卡片）、`services/api.js`（API 适配层）以及 `styles/main.css`（全局样式）。
@@ -31,7 +31,7 @@ DNSMesh 是一套面向开发者的自托管域名解析运营平台，提供多
         ▲                     │          │
         │ Remote-User Header  ▼          ▼
  ┌────────────┐       ┌──────────────┐┌─────────────┐
- │   Reverse  │◀────▶│ GORM + Postgres││Provider SDK│
+ │   Reverse  │◀────▶│ GORM + SQLite ││Provider SDK│
  │   Proxy    │       └──────────────┘└─────────────┘
  └────────────┘
 ```
@@ -42,7 +42,7 @@ DNSMesh 是一套面向开发者的自托管域名解析运营平台，提供多
 
 - Go 1.21 或更高版本
 - Node.js 18 及以上（推荐搭配 npm 9+）
-- PostgreSQL 15（可通过 Docker Compose 提供）
+- SQLite（内置，无需额外服务）
 - Docker / Docker Compose（可选，用于一体化启动与部署）
 
 ### 本地开发步骤
@@ -53,16 +53,17 @@ DNSMesh 是一套面向开发者的自托管域名解析运营平台，提供多
    cd dnsmesh
    ```
 
-2. **启动数据库（可选）**
-   ```bash
-   docker-compose up -d postgres
-   ```
-
-3. **配置后端环境变量**
+2. **配置后端环境变量**
    ```bash
    cd backend
    cp .env.example .env
-   # 按需修改数据库连接、ENCRYPTION_KEY 等变量
+   # 按需修改 SQLITE_PATH、ENCRYPTION_KEY 等变量
+   ```
+
+3. **（可选）从 Postgres 迁移到 SQLite**
+   ```bash
+   # 确保 Postgres 可访问（旧环境）
+   go run cmd/migrate_sqlite/main.go
    ```
 
 4. **运行后端 API**
@@ -80,7 +81,7 @@ DNSMesh 是一套面向开发者的自托管域名解析运营平台，提供多
    ```
    前端默认运行在 `http://localhost:3000`，通过 Vite 代理访问后端 API。
 
-> 提示：项目根目录提供 `./start.sh` 作为便捷脚本，会顺序启动 Postgres、后端与前端（需本机已安装 Docker、Go、Node）。
+> 提示：项目根目录提供 `./start.sh` 作为便捷脚本，会在 SQLite 缺失时尝试迁移，然后启动后端与前端（需本机已安装 Go、Node）。
 
 ### 构建生产版本
 
@@ -95,12 +96,13 @@ DNSMesh 是一套面向开发者的自托管域名解析运营平台，提供多
 | --- | --- | --- |
 | `PORT` | `8080` | 后端监听端口 |
 | `GIN_MODE` | `release` | Gin 运行模式（开发环境可设为 `debug`） |
-| `DB_HOST` | `localhost` | PostgreSQL 主机地址 |
-| `DB_PORT` | `5432` | PostgreSQL 端口 |
-| `DB_USER` | `dnsmesh` | 数据库用户名 |
-| `DB_PASSWORD` | _(空)_ | 数据库密码 |
-| `DB_NAME` | `dnsmesh` | 数据库名称 |
-| `DB_SSLMODE` | `disable` | PostgreSQL SSL 模式 |
+| `SQLITE_PATH` | `data/dnsmesh.db` | SQLite 数据库存储路径 |
+| `DB_HOST` | `localhost` | Postgres 主机地址（迁移时使用） |
+| `DB_PORT` | `5432` | Postgres 端口（迁移时使用） |
+| `DB_USER` | `dnsmesh` | Postgres 用户名（迁移时使用） |
+| `DB_PASSWORD` | _(空)_ | Postgres 密码（迁移时使用） |
+| `DB_NAME` | `dnsmesh` | Postgres 数据库（迁移时使用） |
+| `DB_SSLMODE` | `disable` | Postgres SSL 模式（迁移时使用） |
 | `ENCRYPTION_KEY` | _(必填)_ | 32 字节字符串，用于 AES-256-GCM 加密 Provider 凭据，未设置会导致应用启动失败 |
 
 ## 🐳 Docker Compose 部署
@@ -113,7 +115,7 @@ DNSMesh 是一套面向开发者的自托管域名解析运营平台，提供多
    ```bash
    docker-compose up -d
    ```
-   将启动 `postgres` 与 `backend` 两个服务，默认暴露端口 `5432` 与 `8080`。
+   将启动 `backend` 服务并在容器内使用 SQLite，默认暴露端口 `8080`。如需迁移旧 Postgres，可运行 `docker-compose --profile migrate up -d postgres`。
 
 ## 🧪 测试与质量保障
 

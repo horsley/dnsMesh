@@ -25,7 +25,7 @@ WORKDIR /app/backend
 RUN sed -i 's/dl-cdn.alpinelinux.org/mirrors.cloud.tencent.com/g' /etc/apk/repositories
 
 # Install build dependencies
-RUN apk add --no-cache git
+RUN apk add --no-cache git build-base sqlite-dev
 
 # Configure Go proxy for faster dependency download
 ENV GOPROXY=https://goproxy.cn,direct
@@ -42,7 +42,7 @@ COPY backend/ ./
 COPY --from=frontend-builder /app/backend/public ./public
 
 # Build the backend application
-RUN CGO_ENABLED=0 GOOS=linux go build -o dnsmesh ./cmd/main.go
+RUN CGO_ENABLED=1 GOOS=linux go build -o dnsmesh ./cmd/main.go
 
 # Final runtime stage
 FROM alpine:latest
@@ -53,7 +53,7 @@ WORKDIR /app
 RUN sed -i 's/dl-cdn.alpinelinux.org/mirrors.cloud.tencent.com/g' /etc/apk/repositories
 
 # Install runtime dependencies
-RUN apk --no-cache add ca-certificates tzdata
+RUN apk --no-cache add ca-certificates tzdata sqlite-libs
 
 # Create non-root user
 RUN addgroup -g 1001 -S dnsmesh && \
@@ -65,8 +65,8 @@ COPY --from=backend-builder /app/backend/dnsmesh .
 # Copy public files (frontend build)
 COPY --from=backend-builder /app/backend/public ./public
 
-# Change ownership to non-root user
-RUN chown -R dnsmesh:dnsmesh /app
+# Prepare data directory and change ownership to non-root user
+RUN mkdir -p /app/data && chown -R dnsmesh:dnsmesh /app
 
 USER dnsmesh
 

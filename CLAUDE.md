@@ -50,9 +50,10 @@ The build output goes to `frontend/dist/` and should be copied to `backend/publi
 
 ### Database
 
-**Start PostgreSQL via Docker:**
+The backend uses SQLite by default. To migrate from an existing Postgres instance, run:
 ```bash
-docker-compose up -d postgres
+cd backend
+go run cmd/migrate_sqlite/main.go
 ```
 
 **Full stack startup:**
@@ -74,7 +75,7 @@ This script tests authentication, provider management, DNS records, and audit lo
 ### Backend Structure
 
 - **Entry point:** `backend/cmd/main.go` - Initializes crypto, database, Gin router, sessions, and routes
-- **Database:** `backend/internal/database/database.go` - GORM with PostgreSQL, handles migrations and default user creation
+- **Database:** `backend/internal/database/database.go` - GORM with SQLite, handles migrations and cleanup
 - **Models:** `backend/internal/models/` - GORM models for User, Provider, DNSRecord, AuditLog
 - **Handlers:** `backend/internal/handlers/` - Gin HTTP handlers for auth, providers, records, audit logs
 - **Services:** `backend/internal/services/` - Business logic including:

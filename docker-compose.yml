@@ -2,6 +2,7 @@ version: '3.8'
 
 services:
   postgres:
+    profiles: ["migrate"]
     image: postgres:15-alpine
     container_name: dnsmesh-db
     environment:
@@ -26,21 +27,16 @@ services:
     environment:
       - PORT=8080
       - GIN_MODE=release
-      - DB_HOST=postgres
-      - DB_PORT=5432
-      - DB_USER=dnsmesh
-      - DB_PASSWORD=dnsmesh_password
-      - DB_NAME=dnsmesh
-      - DB_SSLMODE=disable
+      - SQLITE_PATH=/app/data/dnsmesh.db
       - SESSION_SECRET=your-secret-key-change-this-in-production
       - ADMIN_USERNAME=admin
       - ADMIN_PASSWORD=admin123
       - ENCRYPTION_KEY=12345678901234567890123456789012
     ports:
       - "8080:8080"
-    depends_on:
-      postgres:
-        condition: service_healthy
+    volumes:
+      - sqlite_data:/app/data
 
 volumes:
+  sqlite_data:
   postgres_data:

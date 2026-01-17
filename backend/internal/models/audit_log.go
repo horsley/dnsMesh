@@ -9,7 +9,7 @@ type AuditLog struct {
 	Action       string    `json:"action" gorm:"not null;index"` // create, update, delete, sync
 	ResourceType string    `json:"resource_type" gorm:"index"`   // record, provider
 	ResourceID   uint      `json:"resource_id"`
-	Details      string    `json:"details" gorm:"type:jsonb"` // JSON details
+	Details      string    `json:"details" gorm:"type:text"` // JSON details
 	IPAddress    string    `json:"ip_address"`
 	CreatedAt    time.Time `json:"created_at" gorm:"index"`
 }

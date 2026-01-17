@@ -8,7 +8,7 @@
 
 ### Phase 1: 基础架构
 - ✅ Go 后端框架（Gin + GORM）
-- ✅ PostgreSQL 数据库设计
+- ✅ SQLite 数据库设计
 - ✅ Session-based 用户认证
 - ✅ AES-256 加密存储敏感信息
 - ✅ Mithril.js 前端框架
@@ -161,20 +161,17 @@ GET    /api/audit-logs              # 审计日志
 ### 本地开发
 
 ```bash
-# 1. 启动数据库
-docker-compose up -d postgres
-
-# 2. 启动后端
+# 1. 启动后端
 cd backend
 go mod tidy
 go run cmd/main.go
 
-# 3. 构建前端
+# 2. 构建前端
 cd frontend
 npm install
 npm run build
 
-# 4. 访问
+# 3. 访问
 # 打开 http://localhost:8080
 # 登录: admin / admin123
 ```
@@ -347,10 +344,10 @@ openssl rand -base64 32 | cut -c1-32
 - 简单直接的 API
 - 适合小型应用
 
-**数据库 - PostgreSQL**
-- 可靠稳定
-- JSONB 支持（存储审计日志）
-- 广泛使用
+**数据库 - SQLite**
+- 轻量嵌入式
+- 无需额外服务
+- 适合小型数据量
 
 ### 架构决策
 
@@ -367,7 +364,7 @@ openssl rand -base64 32 | cut -c1-32
 - [Mithril.js](https://mithril.js.org/)
 - [Cloudflare API](https://developers.cloudflare.com/api/)
 - [腾讯云 DNSPod API](https://cloud.tencent.com/document/product/1427)
-- [PostgreSQL](https://www.postgresql.org/)
+- [SQLite](https://www.sqlite.org/)
 
 ## 💡 贡献指南
 

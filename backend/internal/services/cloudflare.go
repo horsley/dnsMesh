@@ -4,6 +4,10 @@ import (
 	"context"
 	"dnsmesh/internal/models"
 	"fmt"
+	"log"
+	"net"
+	"os"
+	"strings"
 
 	"github.com/cloudflare/cloudflare-go"
 )
@@ -29,6 +33,7 @@ func (s *CloudflareService) SyncRecords() ([]DNSRecordSync, error) {
 
 	ctx := context.Background()
 	var allRecords []DNSRecordSync
+	seenRecordIDs := make(map[string]struct{})
 
 	// List all zones
 	zones, err := api.ListZones(ctx)
@@ -43,9 +48,75 @@ func (s *CloudflareService) SyncRecords() ([]DNSRecordSync, error) {
 			return nil, fmt.Errorf("failed to list DNS records for zone %s: %w", zone.Name, err)
 		}
 
+		debugDomain := strings.TrimSpace(os.Getenv("CLOUDFLARE_DEBUG_DOMAIN"))
+		debugRecordID := strings.TrimSpace(os.Getenv("CLOUDFLARE_DEBUG_RECORD_ID"))
+
 		for _, record := range records {
+			if debugDomain != "" && strings.EqualFold(record.Name, debugDomain) ||
+				debugRecordID != "" && record.ID == debugRecordID {
+				priority := ""
+				if record.Priority != nil {
+					priority = fmt.Sprintf("%d", *record.Priority)
+				}
+				log.Printf(
+					"Cloudflare Sync: debug record (zone=%s name=%s type=%s content=%s id=%s priority=%s)",
+					zone.Name,
+					record.Name,
+					record.Type,
+					record.Content,
+					record.ID,
+					priority,
+				)
+			}
+
+			if record.ID != "" {
+				if _, exists := seenRecordIDs[record.ID]; exists {
+					log.Printf(
+						"Cloudflare Sync: duplicate record id %s (zone=%s name=%s type=%s content=%s)",
+						record.ID,
+						zone.Name,
+						record.Name,
+						record.Type,
+						record.Content,
+					)
+					continue
+				}
+				seenRecordIDs[record.ID] = struct{}{}
+			}
+
+			recordType := record.Type
+			if recordType == models.RecordTypeA && record.Content != "" && net.ParseIP(record.Content) == nil {
+				priority := ""
+				if record.Priority != nil {
+					priority = fmt.Sprintf("%d", *record.Priority)
+				}
+				log.Printf(
+					"Cloudflare Sync: A record has non-IP content; skipping (zone=%s name=%s content=%s id=%s priority=%s)",
+					zone.Name,
+					record.Name,
+					record.Content,
+					record.ID,
+					priority,
+				)
+				continue
+			}
+
 			// Only sync A and CNAME records
-			if record.Type != models.RecordTypeA && record.Type != models.RecordTypeCNAME {
+			if recordType != models.RecordTypeA && recordType != models.RecordTypeCNAME {
+				if recordType == "MX" {
+					priority := ""
+					if record.Priority != nil {
+						priority = fmt.Sprintf("%d", *record.Priority)
+					}
+					log.Printf(
+						"Cloudflare Sync: skipping MX record (zone=%s name=%s content=%s id=%s priority=%s)",
+						zone.Name,
+						record.Name,
+						record.Content,
+						record.ID,
+						priority,
+					)
+				}
 				continue
 			}
 
@@ -53,7 +124,7 @@ func (s *CloudflareService) SyncRecords() ([]DNSRecordSync, error) {
 				ZoneID:           zone.ID,
 				ZoneName:         zone.Name,
 				FullDomain:       record.Name,
-				RecordType:       record.Type,
+				RecordType:       recordType,
 				TargetValue:      record.Content,
 				TTL:              record.TTL,
 				Active:           true,

@@ -540,6 +540,7 @@ func ReanalyzeRecords(c *gin.Context) {
 	}
 
 	providerStats := make(map[uint]*providerSyncSummary)
+	syncedRecordIDs := make(map[uint]map[string]struct{})
 
 	// Collect all records from all providers with provider ID tracking
 	type RecordWithProvider struct {
@@ -566,11 +567,15 @@ func ReanalyzeRecords(c *gin.Context) {
 			summary.Errors = append(summary.Errors, fmt.Sprintf("sync: %v", err))
 			continue
 		}
+		syncedRecordIDs[provider.ID] = make(map[string]struct{})
 
 		log.Printf("ReanalyzeRecords: Synced %d records from provider %d", len(records), provider.ID)
 
 		// Track provider ID for each record
 		for _, rec := range records {
+			if rec.ProviderRecordID != "" {
+				syncedRecordIDs[provider.ID][rec.ProviderRecordID] = struct{}{}
+			}
 			summary.Synced++
 			if len(summary.Records) < maxAuditRecordsPerProvider {
 				summary.Records = append(summary.Records, map[string]string{
@@ -608,11 +613,21 @@ func ReanalyzeRecords(c *gin.Context) {
 		}
 		var record models.DNSRecord
 
-		// Try to find existing record
-		err := database.DB.Where(
-			"provider_id = ? AND zone_id = ? AND full_domain = ? AND record_type = ?",
-			rwp.ProviderID, rwp.Record.ZoneID, rwp.Record.FullDomain, rwp.Record.RecordType,
-		).First(&record).Error
+		// Try to find existing record by provider record ID first (more stable across type/name changes)
+		var err error
+		if rwp.Record.ProviderRecordID != "" {
+			err = database.DB.Where(
+				"provider_id = ? AND provider_record_id = ?",
+				rwp.ProviderID, rwp.Record.ProviderRecordID,
+			).First(&record).Error
+		}
+		if err != nil {
+			// Fall back to matching by zone + domain + type
+			err = database.DB.Where(
+				"provider_id = ? AND zone_id = ? AND full_domain = ? AND record_type = ?",
+				rwp.ProviderID, rwp.Record.ZoneID, rwp.Record.FullDomain, rwp.Record.RecordType,
+			).First(&record).Error
+		}
 
 		if err == nil {
 			// Update existing record
@@ -621,11 +636,17 @@ func ReanalyzeRecords(c *gin.Context) {
 			contentChanged := record.TargetValue != rwp.Record.TargetValue ||
 				record.TTL != rwp.Record.TTL ||
 				record.ZoneName != rwp.Record.ZoneName ||
+				record.ZoneID != rwp.Record.ZoneID ||
+				record.FullDomain != rwp.Record.FullDomain ||
+				record.RecordType != rwp.Record.RecordType ||
 				record.Active != rwp.Record.Active
 
+			record.ZoneID = rwp.Record.ZoneID
 			record.TargetValue = rwp.Record.TargetValue
 			record.TTL = rwp.Record.TTL
 			record.ZoneName = rwp.Record.ZoneName
+			record.FullDomain = rwp.Record.FullDomain
+			record.RecordType = rwp.Record.RecordType
 			record.ProviderRecordID = rwp.Record.ProviderRecordID
 			record.Active = rwp.Record.Active
 
@@ -686,6 +707,61 @@ func ReanalyzeRecords(c *gin.Context) {
 	}
 
 	log.Printf("ReanalyzeRecords: Synced %d records to database", synced)
+
+	for providerID, recordIDs := range syncedRecordIDs {
+		summary, ok := providerStats[providerID]
+		if !ok {
+			continue
+		}
+
+		ids := make([]string, 0, len(recordIDs))
+		for id := range recordIDs {
+			ids = append(ids, id)
+		}
+
+		sampleQuery := database.DB.Model(&models.DNSRecord{}).
+			Where("provider_id = ? AND managed = ?", providerID, true).
+			Where("provider_record_id <> ''")
+		updateQuery := database.DB.Model(&models.DNSRecord{}).
+			Where("provider_id = ? AND managed = ?", providerID, true).
+			Where("provider_record_id <> ''")
+
+		if len(ids) > 0 {
+			sampleQuery = sampleQuery.Where("provider_record_id NOT IN ?", ids)
+			updateQuery = updateQuery.Where("provider_record_id NOT IN ?", ids)
+		}
+
+		var missingSample []models.DNSRecord
+		if err := sampleQuery.
+			Select("id", "full_domain", "record_type", "provider_record_id").
+			Limit(10).
+			Find(&missingSample).Error; err == nil && len(missingSample) > 0 {
+			var details []string
+			for _, rec := range missingSample {
+				details = append(details, fmt.Sprintf("%s:%s(%s)", rec.FullDomain, rec.RecordType, rec.ProviderRecordID))
+			}
+			log.Printf(
+				"ReanalyzeRecords: Missing records sample for provider %d: %s",
+				providerID,
+				strings.Join(details, ", "),
+			)
+		}
+
+		result := updateQuery.Update("managed", false)
+		if result.Error != nil {
+			log.Printf("ReanalyzeRecords: Failed to mark missing records for provider %d: %v", providerID, result.Error)
+			summary.Errors = append(summary.Errors, fmt.Sprintf("cleanup: %v", result.Error))
+			continue
+		}
+
+		if result.RowsAffected > 0 {
+			log.Printf(
+				"ReanalyzeRecords: Marked %d records as unmanaged for provider %d (missing from provider)",
+				result.RowsAffected,
+				providerID,
+			)
+		}
+	}
 
 	// Then update server records based on suggestions
 	var updated int
