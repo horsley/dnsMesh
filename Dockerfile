@@ -43,6 +43,7 @@ COPY --from=frontend-builder /app/backend/public ./public
 
 # Build the backend application
 RUN CGO_ENABLED=1 GOOS=linux go build -o dnsmesh ./cmd/main.go
+RUN CGO_ENABLED=1 GOOS=linux go build -o dnsmesh-migrate ./cmd/migrate_sqlite/main.go
 
 # Final runtime stage
 FROM alpine:latest
@@ -61,6 +62,7 @@ RUN addgroup -g 1001 -S dnsmesh && \
 
 # Copy binary from builder
 COPY --from=backend-builder /app/backend/dnsmesh .
+COPY --from=backend-builder /app/backend/dnsmesh-migrate .
 
 # Copy public files (frontend build)
 COPY --from=backend-builder /app/backend/public ./public
