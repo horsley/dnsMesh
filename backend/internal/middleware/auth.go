@@ -3,6 +3,7 @@ package middleware
 import (
 	"log"
 	"net/http"
+	"os"
 
 	"dnsmesh/internal/auth"
 
@@ -10,8 +11,22 @@ import (
 )
 
 // AuthRequired is a middleware that checks Remote-User header for authentication
+// Also supports API Key authentication via X-API-Key header
 func AuthRequired() gin.HandlerFunc {
 	return func(c *gin.Context) {
+		// Check for API Key first
+		apiKey := c.GetHeader("X-API-Key")
+		if apiKey != "" {
+			expectedKey := os.Getenv("API_TOKEN")
+			if expectedKey != "" && apiKey == expectedKey {
+				c.Set("username", "api-user")
+				c.Next()
+				return
+			}
+			// Invalid API key, continue to check other auth methods
+		}
+
+		// Check bypass auth (development mode)
 		if username, ok := auth.BypassUser(); ok {
 			c.Set("username", username)
 			c.Next()
