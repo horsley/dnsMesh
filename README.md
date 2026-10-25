@@ -98,6 +98,8 @@ DNSMesh 是一套面向开发者的自托管域名解析运营平台，提供多
 | `GIN_MODE` | `release` | Gin 运行模式（开发环境可设为 `debug`） |
 | `AUTH_BYPASS` | `false` | 本地调试时可设为 `true` 跳过 Remote-User 认证 |
 | `AUTH_BYPASS_USER` | `local-dev` | 认证跳过时返回的用户名 |
+| `AUTH_ALLOWED_USERS` | _(空，拒绝所有代理用户)_ | 可信反向代理身份的精确用户名白名单，逗号分隔；当前个人部署设为 `horsley` |
+| `API_TOKEN` | _(空，禁用机器认证)_ | 机器请求的 `X-API-Key`，拥有完整 API 权限；错误凭证直接拒绝，不退回浏览器身份 |
 | `SQLITE_PATH` | `data/dnsmesh.db` | SQLite 数据库存储路径 |
 | `DB_HOST` | `localhost` | Postgres 主机地址（迁移时使用） |
 | `DB_PORT` | `5432` | Postgres 端口（迁移时使用） |
@@ -154,7 +156,9 @@ dnsmesh/
 
 ## 🌐 API 概览
 
-所有接口均需通过反向代理携带 `Remote-User` HTTP 头部才能访问（`withCredentials: true`）。本地调试可设置 `AUTH_BYPASS=true` 跳过身份验证。
+浏览器业务请求需由可信反向代理填入 `Remote-User`，且用户名必须在 `AUTH_ALLOWED_USERS` 中；当前部署应设置 `AUTH_ALLOWED_USERS=horsley`。机器业务请求可以用有效 `X-API-Key` 认证。`/api/auth/user` 仅返回浏览器代理身份。本地调试可设置 `AUTH_BYPASS=true` 跳过身份验证。
+
+反向代理入口必须先清空客户端提供的身份头，再由认证服务填入 `Remote-User`；应用不会信任 `X-Remote-User` 或 `X-Forwarded-User`。仅对代理身份做用户名白名单不能替代受信任入口，后端端口不得直接向不可信客户端暴露。生产升级时必须同时配置 `AUTH_ALLOWED_USERS`，否则浏览器身份默认被拒绝。现有合法机器 token 不受该配置影响。
 
 ### 认证
 - `GET /api/auth/user`：获取当前用户信息（从 Remote-User 头部）。
