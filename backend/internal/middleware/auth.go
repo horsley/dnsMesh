@@ -1,7 +1,7 @@
 package middleware
 
 import (
-	"log"
+	"crypto/subtle"
 	"net/http"
 	"os"
 
@@ -18,12 +18,14 @@ func AuthRequired() gin.HandlerFunc {
 		apiKey := c.GetHeader("X-API-Key")
 		if apiKey != "" {
 			expectedKey := os.Getenv("API_TOKEN")
-			if expectedKey != "" && apiKey == expectedKey {
+			if expectedKey != "" && subtle.ConstantTimeCompare([]byte(apiKey), []byte(expectedKey)) == 1 {
 				c.Set("username", "api-user")
 				c.Next()
 				return
 			}
-			// Invalid API key, continue to check other auth methods
+			// A supplied credential must not silently fall back to a browser identity.
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Invalid API key"})
+			return
 		}
 
 		// Check bypass auth (development mode)
@@ -33,32 +35,19 @@ func AuthRequired() gin.HandlerFunc {
 			return
 		}
 
-		// Try multiple common header names for reverse proxy authentication
-		// Common headers: Remote-User, remote-user, X-Remote-User, X-Forwarded-User
+		// Only trust the identity header populated and cleared by our reverse proxy.
+		// Header lookup is case-insensitive; alternate identity names are not trusted.
 		username := c.GetHeader("Remote-User")
-
-		if username == "" {
-			username = c.GetHeader("remote-user")
-		}
-		if username == "" {
-			username = c.GetHeader("X-Remote-User")
-		}
-		if username == "" {
-			username = c.GetHeader("X-Forwarded-User")
-		}
-
-		// Log all authentication-related headers for debugging
-		log.Printf("Auth check - Remote-User: '%s', remote-user: '%s', X-Remote-User: '%s', X-Forwarded-User: '%s'",
-			c.GetHeader("Remote-User"),
-			c.GetHeader("remote-user"),
-			c.GetHeader("X-Remote-User"),
-			c.GetHeader("X-Forwarded-User"))
 
 		if username == "" {
 			c.JSON(http.StatusUnauthorized, gin.H{
 				"error": "Authentication required: Remote-User header not found",
 			})
 			c.Abort()
+			return
+		}
+		if !auth.ProxyUserAllowed(username) {
+			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "User is not authorized"})
 			return
 		}
 

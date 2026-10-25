@@ -27,6 +27,7 @@ services:
     environment:
       - PORT=8080
       - GIN_MODE=release
+      - AUTH_ALLOWED_USERS=horsley
       - SQLITE_PATH=/app/data/dnsmesh.db
       - SESSION_SECRET=your-secret-key-change-this-in-production
       - ADMIN_USERNAME=admin
